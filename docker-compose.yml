@@ -1,0 +1,67 @@
+services:
+  mysql:
+    image: mysql
+    container_name: mysql
+    mem_limit: 256M
+    mem_reservation: 120M
+    cpus: 0.1
+    environment:
+      MYSQL_PASSWORD: 123456
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_USER: observability
+      MYSQL_DATABASE: observability
+    ports:
+      - "3306:3306"
+    networks:
+      - observability-network
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/mysql.cnf:/etc/mysql/my.cnf
+    healthcheck:
+      test: mysqladmin ping -h localhost -u $$MYSQL_USER --password=$$MYSQL_ROOT_PASSWORD
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  observability-app:
+    image: localhost/observability-app:latest
+    container_name: observability-app
+    ports:
+      - "8080:8080"
+    networks:
+      - observability-network
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      mysql:
+        condition: service_healthy
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - observability-network
+    volumes:
+      - prometheus-storage:/prometheus
+      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml
+  grafana:
+    image: grafana/grafana-oss
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - observability-network
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana/prometheus-datasource.yaml:/etc/grafana/provisioning/datasources/grafana-datasource.yml
+networks:
+  observability-network:
+    name: observability-network
+volumes:
+  mysql-data:
+    name: mysql-data
+  grafana-storage:
+    name: grafana-storage
+  prometheus-storage:
+    name: prometheus-storage
